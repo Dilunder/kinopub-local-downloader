@@ -25,6 +25,7 @@ def public_report(health, job):
         "checks": {"dependencies_ready": bool(health.get("ok")),
                    "plugin_loadable": bool(health.get("plugin_loadable")),
                    "pages": True, "metadata": True, "cyrillic_filename": True,
+                   "cookie_header_import": True,
                    "temporary_cookies_cleaned": True},
         "download": {"status": job.get("status"), "progress": job.get("progress"),
                      "downloaded_bytes": job.get("downloaded"), "file_count": len(job.get("files", [])),
@@ -72,10 +73,10 @@ def main():
             assert client.get("/settings").status_code == 200
             assert client.get("/static/app.js").status_code == 200
             settings = client.get("/api/settings").json()
-            settings["auth_source"] = "file"
-            cookies = "# Netscape HTTP Cookie File\n.kino.pub\tTRUE\t/\tTRUE\t2147483647\tqa\tFAKE\n"
-            result = client.post("/api/settings/cookies", files={"file": ("cookies.txt", cookies)})
+            result = client.post("/api/settings/cookies/header", json={"domain":"kino.pub","cookie_header":"qa=FAKE","user_agent":"Mozilla/5.0 KinoPub Offline Test"})
             assert result.status_code == 200, result.text
+            settings = client.get("/api/settings").json()
+            assert settings["auth_source"] == "file"
             assert client.put("/api/settings", json=settings).status_code == 200
             fixture = qa / "Тестовое видео.mp4"
             subprocess.run([health["ffmpeg"], "-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",

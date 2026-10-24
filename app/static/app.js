@@ -3,13 +3,19 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const csrf = $('meta[name="csrf-token"]').content;
 let noticeTimer;
-function notice(message, error = false) {
+function notice(message, error = false, authHelp = false) {
   const node = $("#notice");
   node.textContent = message;
+  if (authHelp) {
+    const link = document.createElement("a");
+    link.href = "/settings#auth"; link.className = "secondary auth-help-link";
+    link.textContent = "Настроить авторизацию →";
+    node.append(document.createElement("br"), link);
+  }
   node.classList.toggle("error", error);
   node.hidden = false;
   clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => { node.hidden = true; }, error ? 22000 : 7000);
+  if (!error) noticeTimer = setTimeout(() => { node.hidden = true; }, 7000);
 }
 async function api(path, options = {}) {
   const headers = {"X-CSRF-Token": csrf, ...options.headers};
@@ -17,14 +23,18 @@ async function api(path, options = {}) {
   const response = await fetch(path, {...options, headers});
   let data;
   try { data = await response.json(); } catch { throw new Error(`Ошибка сервера (${response.status})`); }
-  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+  if (!response.ok) {
+    const error = new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail));
+    error.code = data.code;
+    throw error;
+  }
   return data;
 }
 async function busy(button, action) {
   button.disabled = true;
   const text = button.textContent;
   button.textContent = "Подождите…";
-  try { return await action(); } catch (error) { notice(error.message, true); }
+  try { return await action(); } catch (error) { notice(error.message, true, error.code?.startsWith("cookies_")); }
   finally { button.disabled = false; button.textContent = text; }
 }
 function bytes(value) {
@@ -206,12 +216,18 @@ if (document.body.dataset.page === "settings") {
   const form = $("#settings-form");
   const saveButton = $('button[type="submit"]', form);
   saveButton.disabled = true;
-  function authVisibility() { $("#browser-field").hidden = $("#auth-source").value !== "browser"; }
+  function authVisibility() {
+    const fromBrowser = $("#auth-source").value === "browser";
+    $("#browser-field").hidden = !fromBrowser;
+    $("#browser-cookie-note").hidden = !fromBrowser || !["chrome", "edge", "chromium", "brave", "opera", "vivaldi", "whale"].includes($("#browser").value);
+  }
   api("/api/settings").then(settings => {
     for (const [key, value] of Object.entries(settings)) { const input = form.elements.namedItem(key); if (input) input.value = value; }
     authVisibility(); saveButton.disabled = false;
   }).catch(error => notice(error.message, true));
   $("#auth-source").addEventListener("change", authVisibility);
+  $("#browser").addEventListener("change", authVisibility);
+  if (location.hash === "#auth") $("#cookie-header-import").open = true;
   form.addEventListener("submit", event => {
     event.preventDefault();
     busy(saveButton, async () => {
@@ -227,6 +243,14 @@ if (document.body.dataset.page === "settings") {
     const body = new FormData(); body.append("file", file);
     const result = await api("/api/settings/cookies", {method: "POST", body});
     $("#cookies-file").value = "";
+    $("#auth-source").value = "file"; authVisibility();
+    notice(result.message);
+  }));
+  $("#import-cookie-header").addEventListener("click", event => busy(event.target, async () => {
+    const input = $("#cookie-header");
+    if (!input.value.trim()) throw new Error("Вставьте Cookie из Request Headers страницы KinoPub");
+    const result = await api("/api/settings/cookies/header", {method:"POST", body:JSON.stringify({domain:$("#cookie-domain").value,cookie_header:input.value,user_agent:$("#user-agent").value})});
+    input.value = "";
     $("#auth-source").value = "file"; authVisibility();
     notice(result.message);
   }));

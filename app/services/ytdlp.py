@@ -29,6 +29,34 @@ PROGRESS_TEMPLATE = (
 )
 
 
+class YtdlpError(ValueError):
+    def __init__(self, message: str, code: str = "ytdlp_error"):
+        super().__init__(message)
+        self.code = code
+
+
+def explain_error(output: str, settings: Settings) -> YtdlpError:
+    lowered = output.lower()
+    browser = {"edge": "Microsoft Edge", "chrome": "Google Chrome", "firefox": "Firefox"}.get(settings.browser, settings.browser)
+    if "could not copy chrome cookie database" in lowered:
+        return YtdlpError(
+            f"{browser} заблокировал свою базу cookies. Не удалось прочитать сессию браузера.\n"
+            "В настройках раскройте «Вставить Cookie из браузера» или загрузите свой Netscape cookies.txt — браузер можно оставить открытым.\n"
+            "Для автоматического чтения cookies полностью закройте выбранный браузер, а интерфейс откройте в другом.",
+            "cookies_locked")
+    if any(part in lowered for part in ("failed to decrypt", "app-bound", "app bound", "unsupported cookie version", "cannot decrypt", "pycryptodomex", "no module named 'cryptodome'")):
+        return YtdlpError(
+            f"Не удалось расшифровать cookies {browser}. Защита Windows/браузера может запрещать чтение сессии сторонним процессом.\n"
+            "В настройках используйте «Вставить Cookie из браузера» или собственный Netscape cookies.txt.",
+            "cookies_decryption")
+    if "cookies database" in lowered and ("could not find" in lowered or "not found" in lowered):
+        return YtdlpError(f"Не найден профиль cookies {browser}. Войдите на сайт в этом браузере либо импортируйте Cookie в настройках.", "cookies_missing")
+    if "cloudflare" in lowered or "http error 403" in lowered:
+        return YtdlpError("Сайт отклонил запрос. Проверьте, что видео открывается в вашем браузере, и обновите Cookie вместе с User-Agent в настройках. Автоматический обход проверки сайта не выполняется.", "cookies_rejected")
+    lines = list(dict.fromkeys(sanitize_log(line) for line in output.splitlines() if line.strip()))
+    return YtdlpError("yt-dlp не смог обработать видео. " + "\n".join(lines[-8:]))
+
+
 def health() -> dict:
     def package(name):
         try:
@@ -82,6 +110,8 @@ def cli_prefix() -> list[str]:
 def base_args(settings: Settings) -> list[str]:
     args = cli_prefix() + ["--ignore-config", "--no-cache-dir", "--no-colors", "--socket-timeout", "30", "--retries", "3"]
     args += auth_args(settings)
+    if settings.user_agent:
+        args += ["--user-agent", settings.user_agent]
     if settings.proxy:
         args += ["--proxy", settings.proxy]
     # Only this extractor is allowed outside explicit developer mode.
@@ -284,8 +314,7 @@ async def get_metadata(url: str, settings: Settings) -> dict:
     finally:
         cleanup_process(process)
     if process.returncode:
-        safe = sanitize_log(stderr.decode("utf-8", errors="replace")[-4000:])
-        raise ValueError("Не удалось получить информацию. Проверьте cookies, подписку и доступность сайта. " + safe)
+        raise explain_error(stderr.decode("utf-8", errors="replace")[-8000:], settings)
     try:
         return normalize_metadata(json.loads(stdout))
     except (ValueError, TypeError, KeyError):

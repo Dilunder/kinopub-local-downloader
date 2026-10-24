@@ -2,7 +2,8 @@ import re
 from pathlib import Path, PureWindowsPath
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from typing import Literal
 
 from app.config import DEFAULT_TEMPLATE, config
 
@@ -57,6 +58,13 @@ def validate_template(value: str) -> str:
     return value
 
 
+def validate_user_agent(value: str) -> str:
+    value = value.strip()
+    if value and (len(value) > 1024 or not value.startswith("Mozilla/") or any(ord(c) < 32 or ord(c) > 126 for c in value)):
+        raise ValueError("User-Agent браузера должен начинаться с Mozilla/ и не содержать переносов строк")
+    return value
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
     download_dir: str = str(config.download_dir)
@@ -68,6 +76,12 @@ class Settings(BaseModel):
     filename_template: str = DEFAULT_TEMPLATE
     parallel_downloads: int = Field(1, ge=1, le=4)
     proxy: str = ""
+    user_agent: str = ""
+
+    @field_validator("user_agent")
+    @classmethod
+    def ua_valid(cls, value):
+        return validate_user_agent(value)
 
     @field_validator("auth_source")
     @classmethod
@@ -127,6 +141,25 @@ class Settings(BaseModel):
                 url.port
             except ValueError:
                 raise ValueError("Некорректный порт proxy")
+        return value
+
+
+class CookieHeaderImport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    domain: Literal["kino.watch", "kino.pub"] = "kino.watch"
+    cookie_header: SecretStr
+    user_agent: str = ""
+
+    @field_validator("user_agent")
+    @classmethod
+    def ua_valid(cls, value):
+        return validate_user_agent(value)
+
+    @field_validator("cookie_header")
+    @classmethod
+    def header_size(cls, value):
+        if not 1 <= len(value.get_secret_value()) <= 1_048_576:
+            raise ValueError("Cookie должен содержать от 1 до 1048576 символов")
         return value
 
 

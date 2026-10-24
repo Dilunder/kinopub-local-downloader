@@ -156,7 +156,7 @@ class Worker:
             if job_id in self.cancel_requested:
                 update_job(job_id, status="canceled", phase="Отменено", speed=None, eta=None)
             elif code:
-                message = last_error or f"yt-dlp завершился с кодом {code}. Проверьте лог, cookies и свободное место"
+                message = str(ytdlp.explain_error(last_error, settings)) if last_error else f"yt-dlp завершился с кодом {code}. Проверьте лог, cookies и свободное место"
                 update_job(job_id, status="error", phase="Ошибка", error=message, speed=None, eta=None)
             elif not files:
                 raise ValueError("yt-dlp завершился без файлов. Проверьте выбор эпизодов и лог")

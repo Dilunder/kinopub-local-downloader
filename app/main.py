@@ -21,9 +21,9 @@ from sqlalchemy import select
 from app.config import ROOT, config
 from app.db import Base, engine, Session
 from app.models import Job, now
-from app.schemas import JobCreate, MetadataRequest, Settings
+from app.schemas import CookieHeaderImport, JobCreate, MetadataRequest, Settings
 from app.services.settings import get_settings, save_settings
-from app.services.security import secure_cookie_file
+from app.services.cookies import from_header, normalize_netscape, save_cookie_text
 from app.services.worker import Worker, log_path, update_job
 from app.services import ytdlp
 
@@ -169,35 +169,27 @@ async def upload_cookies(file: UploadFile = File(...)):
         text = content.decode("utf-8-sig")
     except UnicodeError:
         raise HTTPException(422, "Нужен UTF-8 cookies.txt в Netscape-формате")
-    if not text.startswith(("# Netscape HTTP Cookie File", "# HTTP Cookie File")):
-        raise HTTPException(422, "Неверный формат: нужен Netscape cookies.txt")
-    # Store only cookies belonging to approved sites, never all browser credentials.
-    lines = ["# Netscape HTTP Cookie File"]
-    for line in text.splitlines():
-        if not line.strip() or (line.startswith("#") and not line.startswith("#HttpOnly_")):
-            continue
-        fields = line.split("\t")
-        domain = fields[0].removeprefix("#HttpOnly_").lstrip(".").lower()
-        if domain not in {"kino.pub", "kino.watch", "www.kino.pub", "www.kino.watch"}:
-            continue
-        if len(fields) != 7 or fields[1] not in {"TRUE", "FALSE"} or fields[3] not in {"TRUE", "FALSE"} or not fields[4].isdigit():
-            raise HTTPException(422, "Повреждённая запись cookies.txt")
-        lines.append(line)
-    if len(lines) == 1:
-        raise HTTPException(422, "В файле нет cookies kino.pub / kino.watch")
-    path = config.data_dir / "cookies.txt"
-    temp = config.data_dir / ("cookies-" + secrets.token_hex(8) + ".tmp")
     try:
-        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
-            secure_cookie_file(temp)
-            stream.write("\n".join(lines) + "\n")
-        os.replace(temp, path)
-    except (OSError, ValueError):
-        raise HTTPException(422, "Не удалось безопасно сохранить cookies.txt. Проверьте права папки data")
-    finally:
-        temp.unlink(missing_ok=True)
-    return {"ok": True, "message": "cookies.txt сохранён; выберите источник «Файл» и сохраните настройки"}
+        normalized, count = normalize_netscape(text)
+        save_cookie_text(normalized)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    save_settings(get_settings().model_copy(update={"auth_source": "file"}))
+    return {"ok": True, "count": count, "auth_source": "file", "message": "cookies.txt сохранён и уже используется. Остальные изменения формы сохраните отдельно"}
+
+
+@app.post("/api/settings/cookies/header")
+async def import_cookie_header(body: CookieHeaderImport):
+    try:
+        text, count = from_header(body.cookie_header.get_secret_value(), body.domain)
+        save_cookie_text(text)
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    updates = {"auth_source": "file"}
+    if body.user_agent:
+        updates["user_agent"] = body.user_agent
+    save_settings(get_settings().model_copy(update=updates))
+    return {"ok": True, "count": count, "auth_source": "file", "message": "Cookie сохранён локально и уже используется. Можно вернуться к добавлению видео"}
 
 
 @app.post("/api/metadata")
@@ -207,6 +199,8 @@ async def metadata(body: MetadataRequest):
     async with metadata_lock:
         try:
             return await ytdlp.get_metadata(body.url, get_settings())
+        except ytdlp.YtdlpError as error:
+            return JSONResponse({"detail": str(error), "code": error.code}, status_code=422)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
         except OSError:
