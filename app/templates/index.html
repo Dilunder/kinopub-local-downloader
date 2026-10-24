@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block page %}queue{% endblock %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">ВАША ЛОКАЛЬНАЯ МЕДИАТЕКА</p><h1 id="page-title">Сохраните на потом<span>.</span></h1><p class="subheading">Добавьте ссылку, выберите дорожки — остальное сделает очередь.</p></div><a href="/settings" class="text-link">Настроить загрузки ↗</a></section>
+<div class="workspace" id="add-section">
+ <section class="panel add-panel">
+  <div class="section-heading"><h2><span class="step">01</span> Добавить видео</h2><span class="tag">kino.pub / kino.watch</span></div>
+  <form id="metadata-form">
+   <label for="video-url">Ссылка на фильм или сериал</label>
+   <div class="url-row"><input id="video-url" name="url" type="url" required placeholder="https://kino.watch/item/view/…" autocomplete="off"><button id="metadata-button" class="primary" type="submit">Получить информацию <span>↗</span></button></div>
+   <p class="hint" id="metadata-help">Ссылка на сериал добавляет все сезоны. Эпизоды можно выбрать перед загрузкой.</p>
+  </form>
+  <section id="metadata-result" hidden aria-live="polite">
+   <div class="media-preview"><div class="film-symbol" aria-hidden="true">▶</div><div><p class="eyebrow" id="media-kind"></p><h3 id="media-title"></h3><p class="hint" id="media-detail"></p></div></div>
+   <form id="job-form">
+    <div class="form-grid"><div><label for="job-quality">Максимальное качество</label><select id="job-quality" name="quality"><option value="best">Лучшее доступное</option><option value="2160">2160p · 4K</option><option value="1440">1440p</option><option value="1080">1080p · Full HD</option><option value="720">720p · HD</option><option value="480">480p</option><option value="360">360p</option></select></div><div><label for="job-audio">Предпочтительное аудио</label><input id="job-audio" name="audio" list="audio-options" placeholder="По умолчанию / язык / студия"><datalist id="audio-options"></datalist></div>
+    <div><label for="job-subtitles">Субтитры</label><input id="job-subtitles" name="subtitles" list="subtitle-options" placeholder="Нет / ru,en / all"><datalist id="subtitle-options"></datalist></div><div><label for="job-folder">Подпапка загрузок</label><input id="job-folder" name="folder" placeholder="Например: Сериалы/Вечер"></div></div>
+    <label for="job-template">Шаблон имени файла</label><input id="job-template" name="filename_template" required>
+    <p class="hint" id="available-info"></p>
+    <div id="episode-section" hidden x-data="{expanded: false}">
+      <label for="episode-mode">Какие эпизоды скачать</label><select id="episode-mode"><option value="all">Весь сериал</option><option value="selected">Только выбранные эпизоды</option></select>
+      <div id="episode-picker" hidden><div class="episode-toolbar"><button type="button" class="text-link" id="select-all">Выбрать все</button><button type="button" class="text-link" id="select-none">Снять выбор</button></div><div id="episodes" class="episodes"></div></div>
+    </div>
+    <div class="form-bottom"><span class="hint">MKV · исходное качество без перекодирования</span><button class="primary" type="submit">＋ В очередь</button></div>
+   </form>
+  </section>
+ </section>
+ <aside class="panel system-panel"><p class="eyebrow">ГОТОВНОСТЬ СИСТЕМЫ</p><div id="health" hx-get="/partials/health" hx-trigger="load, every 30s" hx-swap="innerHTML"><p class="hint">Проверяем зависимости…</p></div><div class="system-divider"></div><p class="eyebrow">КАК ЭТО РАБОТАЕТ</p><ol class="howto"><li><b>Войдите в аккаунт</b><span>Выберите браузер или cookies.txt в настройках.</span></li><li><b>Добавьте ссылку</b><span>Фильм, сериал или отдельный эпизод.</span></li><li><b>Скачивайте локально</b><span>По умолчанию одна загрузка за раз.</span></li></ol><a href="/settings" class="secondary settings-link">Открыть настройки →</a></aside>
+</div>
+<section class="queue-section">
+ <div class="queue-heading"><div><p class="eyebrow">ЗАГРУЗКИ И ИСТОРИЯ</p><h2>Ваша очередь <span id="job-count" class="count">0</span></h2></div><span id="poll-status" class="hint">Обновление каждые 2 сек.</span></div>
+ <div class="filter-bar" role="group" aria-label="Фильтр по статусу"><button data-filter="" class="active">Все</button><button data-filter="running">Загружаются</button><button data-filter="queued">Ожидают</button><button data-filter="done">Готово</button><button data-filter="error">Ошибки</button><button data-filter="canceled">Отменены</button></div>
+ <div id="jobs" aria-live="off"></div>
+ <div id="empty-state" class="empty-state"><span class="empty-icon">↓</span><h3>Здесь появятся ваши загрузки</h3><p>Добавьте первую ссылку — фильм будет ждать вас в выбранной папке.</p></div>
+ <div class="pagination"><button class="secondary" id="prev-page">← Назад</button><span id="page-number" class="hint">Страница 1</span><button class="secondary" id="next-page">Далее →</button></div>
+</section>
+<template id="job-template-card"><article class="job-card"><div class="job-top"><div class="job-mark" aria-hidden="true">↓</div><div class="job-name"><h3></h3><p class="hint job-meta"></p></div><span class="status-badge"></span></div><div class="progress-track"><div></div></div><div class="job-stats"><span class="phase"></span><span class="transfer"></span></div><p class="job-error" hidden></p><div class="job-actions"><button class="secondary" data-action="cancel">Отменить</button><button class="secondary" data-action="retry">Повторить</button><button class="text-link" data-action="folder">Открыть папку ↗</button><button class="text-link" data-action="log">Показать лог</button><button class="text-link delete" data-action="delete">Удалить запись</button></div><pre class="job-log" hidden></pre></article></template>
+{% endblock %}

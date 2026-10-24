@@ -1,0 +1,3 @@
+{% for label, ready in checks %}<div class="health-row"><span>{{ label }}</span><span class="{{ 'good' if ready else 'bad' }}">{{ '● Готово' if ready else '○ Не найден' }}</span></div>{% endfor %}
+<p class="hint health-note">{{ 'Зависимости установлены. Для доступа нужны действующие cookies.' if state.ok else 'Установите недостающие зависимости и перезапустите сервис.' }}</p>
+{% if state.dev_mode %}<p class="bad">Включён dev-режим</p>{% endif %}

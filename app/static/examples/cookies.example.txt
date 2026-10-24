@@ -1,0 +1,3 @@
+# Netscape HTTP Cookie File
+.kino.watch	TRUE	/	TRUE	2147483647	example_session	REPLACE_WITH_YOUR_COOKIE_VALUE
+.kino.pub	TRUE	/	TRUE	2147483647	example_session	REPLACE_WITH_YOUR_COOKIE_VALUE

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="color-scheme" content="dark">
+  <title>KinoPub · Local Downloader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>if (window.tailwind) tailwind.config = {corePlugins: {preflight: false}};</script>
+  <script defer src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body data-page="{% block page %}{% endblock %}">
+<header class="topbar">
+  <a href="/" class="brand" aria-label="KinoPub — главная"><span class="brand-icon">k<span>p</span></span><span>KinoPub <small>LOCAL DOWNLOADER</small></span></a>
+  <nav aria-label="Навигация"><a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Добавить и очередь</a><a href="/?view=history">История</a><a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>Настройки</a></nav>
+  <span class="local-chip"><i></i>127.0.0.1</span>
+</header>
+<main class="shell">
+  <div class="local-notice"><span>◈</span> Только локально. Не выставляйте сервис в интернет. Используйте свой аккаунт и контент, на скачивание которого у вас есть право.</div>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  {% block content %}{% endblock %}
+</main>
+<footer class="shell footer"><span>KinoPub Local Downloader</span><span>yt-dlp + ffmpeg <span class="dot">·</span> ваши файлы остаются у вас</span></footer>
+</body>
+</html>
